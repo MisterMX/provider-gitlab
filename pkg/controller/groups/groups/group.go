@@ -46,17 +46,22 @@ import (
 )
 
 const (
-	errNotGroup          = "managed resource is not a Gitlab Group custom resource"
-	errIDNotInt          = "specified ID is not an integer"
-	errGetFailed         = "cannot get Gitlab Group"
-	errCreateFailed      = "cannot create Gitlab Group"
-	errUpdateFailed      = "cannot update Gitlab Group"
-	errShareFailed       = "cannot share Gitlab Group with: %v"
-	errUnshareFailed     = "cannot unshare Gitlab Group from: %v"
-	errDeleteFailed      = "cannot delete Gitlab Group"
-	errMissingGroupID    = "missing group ID for group to share with"
-	errSWGMissingGroupID = "FOllowing SharedWithGroup is missing GroupID: %v"
-	errLateInitialize    = "Error during LateInitialization: "
+	errNotGroup                = "managed resource is not a Gitlab Group custom resource"
+	errIDNotInt                = "specified ID is not an integer"
+	errGetFailed               = "cannot get Gitlab Group"
+	errCreateFailed            = "cannot create Gitlab Group"
+	errUpdateFailed            = "cannot update Gitlab Group"
+	errShareFailed             = "cannot share Gitlab Group with: %v"
+	errUnshareFailed           = "cannot unshare Gitlab Group from: %v"
+	errDeleteFailed            = "cannot delete Gitlab Group"
+	errMissingGroupID          = "missing group ID for group to share with"
+	errSWGMissingGroupID       = "FOllowing SharedWithGroup is missing GroupID: %v"
+	errLateInitialize          = "Error during LateInitialization: "
+	errLateInitializePushRules = "cannot late-intiailize push rules"
+	errEditPushRules           = "cannot edit Gitlab Group push rules"
+	errAddPushRules            = "cannot add Gitlab Group push rules"
+	errGetPushRules            = "cannot get Gitlab Group push rules"
+	errIsUpToDatePushRules     = "cannot determine if Gitlab group push rules are up to date"
 )
 
 // SetupGroup adds a controller that reconciles Groups.
@@ -116,6 +121,12 @@ func (c *connector) Connect(ctx context.Context, mg resource.Managed) (managed.E
 type external struct {
 	kube   client.Client
 	client groups.Client
+
+	cache struct {
+		externalGroupPushRules   *v1alpha1.PushRules
+		groupPushRulesExist      bool
+		isGroupPushRulesUpToDate bool
+	}
 }
 
 func (e *external) Observe(ctx context.Context, mg resource.Managed) (managed.ExternalObservation, error) {
@@ -147,7 +158,7 @@ func (e *external) Observe(ctx context.Context, mg resource.Managed) (managed.Ex
 
 	current := cr.Spec.ForProvider.DeepCopy()
 
-	err = lateInitialize(&cr.Spec.ForProvider, grp)
+	err = e.lateInitialize(ctx, cr, grp)
 	if err != nil {
 		return managed.ExternalObservation{}, errors.Wrap(err, errGetFailed)
 	}
@@ -159,10 +170,14 @@ func (e *external) Observe(ctx context.Context, mg resource.Managed) (managed.Ex
 	if err != nil {
 		return managed.ExternalObservation{}, errors.Wrap(err, errGetFailed)
 	}
+	e.cache.isGroupPushRulesUpToDate, err = e.isGroupPushRulesUpToDate(ctx, cr)
+	if err != nil {
+		return managed.ExternalObservation{}, errors.Wrap(err, errIsUpToDatePushRules)
+	}
 
 	return managed.ExternalObservation{
 		ResourceExists:          true,
-		ResourceUpToDate:        isUpToDate,
+		ResourceUpToDate:        isUpToDate && e.cache.isGroupPushRulesUpToDate,
 		ResourceLateInitialized: isResourceLateInitialized,
 		ConnectionDetails:       managed.ConnectionDetails{"runnersToken": []byte(grp.RunnersToken)},
 	}, nil
@@ -233,6 +248,33 @@ func (e *external) Update(ctx context.Context, mg resource.Managed) (managed.Ext
 				if err != nil {
 					return managed.ExternalUpdate{}, errors.Wrapf(err, errUnshareFailed, sh.GroupID)
 				}
+			}
+		}
+	}
+
+	if !e.cache.isGroupPushRulesUpToDate {
+		// Edit (PUT) rules only works if push rules already exist.
+		// Otherwise it returns a 404 error.
+		// In this case Add (POST) needs to be called.
+		//
+		// This is a different behaviour as the project API.
+		if e.cache.groupPushRulesExist {
+			_, _, err := e.client.EditGroupPushRule(
+				meta.GetExternalName(cr),
+				groups.GenerateEditGroupPushRuleOptions(cr.Spec.ForProvider.PushRules),
+				gitlab.WithContext(ctx),
+			)
+			if err != nil {
+				return managed.ExternalUpdate{}, errors.Wrap(err, errEditPushRules)
+			}
+		} else {
+			_, _, err := e.client.AddGroupPushRule(
+				meta.GetExternalName(cr),
+				groups.GenerateAddGroupPushRuleOptions(cr.Spec.ForProvider.PushRules),
+				gitlab.WithContext(ctx),
+			)
+			if err != nil {
+				return managed.ExternalUpdate{}, errors.Wrap(err, errAddPushRules)
 			}
 		}
 	}
@@ -365,9 +407,60 @@ func isSharedWithGroupsUpToDate(cr *v1alpha1.GroupParameters, in *gitlab.Group) 
 	return true, nil
 }
 
+func (e *external) isGroupPushRulesUpToDate(ctx context.Context, cr *v1alpha1.Group) (bool, error) {
+	current, err := e.getGroupPushRules(ctx, cr)
+	if err != nil {
+		return false, err
+	}
+
+	// currentReq := groups.GenerateEditGroupPushRuleOptions(current)
+	// specReq := groups.GenerateEditGroupPushRuleOptions(cr.Spec.ForProvider.PushRules)
+
+	// diff := cmp.Diff(specReq, currentReq)
+	// println(diff)
+	// return diff != "", nil
+
+	return cmp.Equal(cr.Spec.ForProvider.PushRules, current), nil
+}
+
+func (e *external) getGroupPushRules(ctx context.Context, cr *v1alpha1.Group) (*v1alpha1.PushRules, error) {
+	if e.cache.externalGroupPushRules != nil {
+		return e.cache.externalGroupPushRules, nil
+	}
+	res, httpRes, err := e.client.GetGroupPushRules(meta.GetExternalName(cr), gitlab.WithContext(ctx))
+	if err != nil {
+		if clients.IsResponseNotFound(httpRes) {
+			e.cache.groupPushRulesExist = false
+			return nil, nil
+		}
+		return nil, errors.Wrap(err, errGetPushRules)
+	}
+	// This flag is necessary as a workaround because AddGroupPushRule must
+	// be used in case no rules have been created yet.
+	e.cache.groupPushRulesExist = true
+
+	e.cache.externalGroupPushRules = &v1alpha1.PushRules{
+		AuthorEmailRegex:           &res.AuthorEmailRegex,
+		BranchNameRegex:            &res.BranchNameRegex,
+		CommitCommitterCheck:       &res.CommitCommitterCheck,
+		CommitCommitterNameCheck:   &res.CommitCommitterNameCheck,
+		CommitMessageNegativeRegex: &res.CommitMessageNegativeRegex,
+		CommitMessageRegex:         &res.CommitMessageRegex,
+		DenyDeleteTag:              &res.DenyDeleteTag,
+		FileNameRegex:              &res.FileNameRegex,
+		MaxFileSize:                &res.MaxFileSize,
+		MemberCheck:                &res.MemberCheck,
+		PreventSecrets:             &res.PreventSecrets,
+		RejectUnsignedCommits:      &res.RejectUnsignedCommits,
+		RejectNonDCOCommits:        &res.RejectNonDCOCommits,
+	}
+	return e.cache.externalGroupPushRules, nil
+}
+
 // lateInitialize fills the empty fields in the group spec with the
 // values seen in gitlab.Group.
-func lateInitialize(in *v1alpha1.GroupParameters, group *gitlab.Group) error { //nolint:gocyclo
+func (e *external) lateInitialize(ctx context.Context, cr *v1alpha1.Group, group *gitlab.Group) error { //nolint:gocyclo
+	in := &cr.Spec.ForProvider
 	if group == nil {
 		return nil
 	}
@@ -420,6 +513,9 @@ func lateInitialize(in *v1alpha1.GroupParameters, group *gitlab.Group) error { /
 	}
 	if in.ExtraSharedRunnersMinutesLimit == nil {
 		in.ExtraSharedRunnersMinutesLimit = &group.ExtraSharedRunnersMinutesLimit
+	}
+	if err := e.lateIntializePushRules(ctx, cr); err != nil {
+		return errors.Wrap(err, errLateInitializePushRules)
 	}
 	return nil
 }
@@ -484,6 +580,32 @@ func lateInitializeSharedWithGroups(cr *v1alpha1.GroupParameters, in *gitlab.Gro
 				cr.SharedWithGroups[i].ExpiresAt = &metav1.Time{Time: time.Time(*inswg.ExpiresAt)}
 			}
 		}
+	}
+	return nil
+}
+
+func (e *external) lateIntializePushRules(ctx context.Context, cr *v1alpha1.Group) error {
+	if cr.Spec.ForProvider.PushRules != nil {
+		cr.Spec.ForProvider.PushRules = &v1alpha1.PushRules{}
+	}
+	pr, err := e.getGroupPushRules(ctx, cr)
+	if err != nil || pr == nil {
+		return err
+	}
+	cr.Spec.ForProvider.PushRules = &v1alpha1.PushRules{
+		AuthorEmailRegex:           clients.LateInitialize(cr.Spec.ForProvider.PushRules.AuthorEmailRegex, pr.AuthorEmailRegex),
+		BranchNameRegex:            clients.LateInitialize(cr.Spec.ForProvider.PushRules.BranchNameRegex, pr.BranchNameRegex),
+		CommitCommitterCheck:       clients.LateInitialize(cr.Spec.ForProvider.PushRules.CommitCommitterCheck, pr.CommitCommitterCheck),
+		CommitCommitterNameCheck:   clients.LateInitialize(cr.Spec.ForProvider.PushRules.CommitCommitterNameCheck, pr.CommitCommitterNameCheck),
+		CommitMessageNegativeRegex: clients.LateInitialize(cr.Spec.ForProvider.PushRules.CommitMessageNegativeRegex, pr.CommitMessageNegativeRegex),
+		CommitMessageRegex:         clients.LateInitialize(cr.Spec.ForProvider.PushRules.CommitMessageRegex, pr.CommitMessageRegex),
+		DenyDeleteTag:              clients.LateInitialize(cr.Spec.ForProvider.PushRules.DenyDeleteTag, pr.DenyDeleteTag),
+		FileNameRegex:              clients.LateInitialize(cr.Spec.ForProvider.PushRules.FileNameRegex, pr.FileNameRegex),
+		MaxFileSize:                clients.LateInitialize(cr.Spec.ForProvider.PushRules.MaxFileSize, pr.MaxFileSize),
+		MemberCheck:                clients.LateInitialize(cr.Spec.ForProvider.PushRules.MemberCheck, pr.MemberCheck),
+		PreventSecrets:             clients.LateInitialize(cr.Spec.ForProvider.PushRules.PreventSecrets, pr.PreventSecrets),
+		RejectUnsignedCommits:      clients.LateInitialize(cr.Spec.ForProvider.PushRules.RejectUnsignedCommits, pr.RejectUnsignedCommits),
+		RejectNonDCOCommits:        clients.LateInitialize(cr.Spec.ForProvider.PushRules.RejectNonDCOCommits, pr.RejectNonDCOCommits),
 	}
 	return nil
 }

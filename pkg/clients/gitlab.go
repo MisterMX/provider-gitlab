@@ -142,13 +142,26 @@ func UseProviderConfig(ctx context.Context, c client.Client, mg resource.Managed
 	}
 }
 
+// LateInitialize return in if not nil or from.
+func LateInitialize[T any](in, from *T) *T {
+	if in != nil {
+		return in
+	}
+	return from
+}
+
+// LateInitializeFromValue returns in if not nil or a pointer to from.
+func LateInitializeFromValue[T any](in *T, from T) *T {
+	if in != nil {
+		return in
+	}
+	return &from
+}
+
 // LateInitializeStringPtr returns `from` if `in` is nil and `from` is non-empty,
 // in other cases it returns `in`.
 func LateInitializeStringPtr(in *string, from string) *string {
-	if in == nil && from != "" {
-		return &from
-	}
-	return in
+	return LateInitializeFromValue(in, from)
 }
 
 // LateInitializeAccessControlValue returns in if it's non-nil, otherwise returns from

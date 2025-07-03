@@ -32,6 +32,7 @@ import (
 	"github.com/pkg/errors"
 	gitlab "gitlab.com/gitlab-org/api/client-go"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/utils/ptr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/crossplane-contrib/provider-gitlab/apis/groups/v1alpha1"
@@ -108,6 +109,10 @@ func withSubGroupCreationLevel(s *v1alpha1.SubGroupCreationLevelValue) groupModi
 
 func withExternalName(n string) groupModifier {
 	return func(r *v1alpha1.Group) { meta.SetExternalName(r, n) }
+}
+
+func withGroupPushRules(pr *v1alpha1.PushRules) groupModifier {
+	return func(r *v1alpha1.Group) { r.Spec.ForProvider.PushRules = pr }
 }
 
 // Use for testing. When ResourceLateInitialized should it be false
@@ -318,6 +323,9 @@ func TestObserve(t *testing.T) {
 							},
 						}, &gitlab.Response{}, nil
 					},
+					MockGetGroupPushRules: func(gid interface{}, options ...gitlab.RequestOptionFunc) (*gitlab.GroupPushRules, *gitlab.Response, error) {
+						return &gitlab.GroupPushRules{}, nil, nil
+					},
 				},
 				cr: group(
 					withClientDefaultValues(),
@@ -339,6 +347,21 @@ func TestObserve(t *testing.T) {
 					withAnnotations(extNameAnnotation),
 					withStatus(v1alpha1.GroupObservation{}),
 					withClientDefaultValues(),
+					withGroupPushRules(&v1alpha1.PushRules{
+						AuthorEmailRegex:           ptr.To(""),
+						BranchNameRegex:            ptr.To(""),
+						CommitCommitterCheck:       ptr.To(false),
+						CommitCommitterNameCheck:   ptr.To(false),
+						CommitMessageNegativeRegex: ptr.To(""),
+						CommitMessageRegex:         ptr.To(""),
+						DenyDeleteTag:              ptr.To(false),
+						FileNameRegex:              ptr.To(""),
+						MaxFileSize:                ptr.To(0),
+						MemberCheck:                ptr.To(false),
+						PreventSecrets:             ptr.To(false),
+						RejectUnsignedCommits:      ptr.To(false),
+						RejectNonDCOCommits:        ptr.To(false),
+					}),
 					withSharedWithGroupsObservation(
 						[]v1alpha1.SharedWithGroupsObservation{
 							{
@@ -392,6 +415,9 @@ func TestObserve(t *testing.T) {
 							ExtraSharedRunnersMinutesLimit: 0,
 						}, &gitlab.Response{}, nil
 					},
+					MockGetGroupPushRules: func(gid interface{}, options ...gitlab.RequestOptionFunc) (*gitlab.GroupPushRules, *gitlab.Response, error) {
+						return &gitlab.GroupPushRules{}, nil, nil
+					},
 				},
 				cr: group(withExternalName("0")),
 			},
@@ -400,6 +426,21 @@ func TestObserve(t *testing.T) {
 					withExternalName("0"),
 					withClientDefaultValues(),
 					withPath(path),
+					withGroupPushRules(&v1alpha1.PushRules{
+						AuthorEmailRegex:           ptr.To(""),
+						BranchNameRegex:            ptr.To(""),
+						CommitCommitterCheck:       ptr.To(false),
+						CommitCommitterNameCheck:   ptr.To(false),
+						CommitMessageNegativeRegex: ptr.To(""),
+						CommitMessageRegex:         ptr.To(""),
+						DenyDeleteTag:              ptr.To(false),
+						FileNameRegex:              ptr.To(""),
+						MaxFileSize:                ptr.To(0),
+						MemberCheck:                ptr.To(false),
+						PreventSecrets:             ptr.To(false),
+						RejectUnsignedCommits:      ptr.To(false),
+						RejectNonDCOCommits:        ptr.To(false),
+					}),
 					withConditions(xpv1.Available()),
 					withDescription(&description),
 					withVisibility(&v1alpha1VisibilityNew),
@@ -420,10 +461,28 @@ func TestObserve(t *testing.T) {
 					MockGetGroup: func(pid interface{}, options ...gitlab.RequestOptionFunc) (*gitlab.Group, *gitlab.Response, error) {
 						return &gitlab.Group{Name: name}, &gitlab.Response{}, nil
 					},
+					MockGetGroupPushRules: func(gid interface{}, options ...gitlab.RequestOptionFunc) (*gitlab.GroupPushRules, *gitlab.Response, error) {
+						return &gitlab.GroupPushRules{}, nil, nil
+					},
 				},
 				cr: group(
 					withPath(""),
 					withClientDefaultValues(),
+					withGroupPushRules(&v1alpha1.PushRules{
+						AuthorEmailRegex:           ptr.To(""),
+						BranchNameRegex:            ptr.To(""),
+						CommitCommitterCheck:       ptr.To(false),
+						CommitCommitterNameCheck:   ptr.To(false),
+						CommitMessageNegativeRegex: ptr.To(""),
+						CommitMessageRegex:         ptr.To(""),
+						DenyDeleteTag:              ptr.To(false),
+						FileNameRegex:              ptr.To(""),
+						MaxFileSize:                ptr.To(0),
+						MemberCheck:                ptr.To(false),
+						PreventSecrets:             ptr.To(false),
+						RejectUnsignedCommits:      ptr.To(false),
+						RejectNonDCOCommits:        ptr.To(false),
+					}),
 					withExternalName(extName),
 				),
 			},
@@ -431,6 +490,21 @@ func TestObserve(t *testing.T) {
 				cr: group(
 					withPath(""),
 					withClientDefaultValues(),
+					withGroupPushRules(&v1alpha1.PushRules{
+						AuthorEmailRegex:           ptr.To(""),
+						BranchNameRegex:            ptr.To(""),
+						CommitCommitterCheck:       ptr.To(false),
+						CommitCommitterNameCheck:   ptr.To(false),
+						CommitMessageNegativeRegex: ptr.To(""),
+						CommitMessageRegex:         ptr.To(""),
+						DenyDeleteTag:              ptr.To(false),
+						FileNameRegex:              ptr.To(""),
+						MaxFileSize:                ptr.To(0),
+						MemberCheck:                ptr.To(false),
+						PreventSecrets:             ptr.To(false),
+						RejectUnsignedCommits:      ptr.To(false),
+						RejectNonDCOCommits:        ptr.To(false),
+					}),
 					withConditions(xpv1.Available()),
 					withAnnotations(extNameAnnotation),
 					withExternalName(extName),
@@ -471,12 +545,42 @@ func TestObserve(t *testing.T) {
 			withClientDefaultValues(),
 			withExternalName("0"),
 			withVisibility(&v1alpha1Visibility),
+			withGroupPushRules(&v1alpha1.PushRules{
+				AuthorEmailRegex:           ptr.To(""),
+				BranchNameRegex:            ptr.To(""),
+				CommitCommitterCheck:       ptr.To(false),
+				CommitCommitterNameCheck:   ptr.To(false),
+				CommitMessageNegativeRegex: ptr.To(""),
+				CommitMessageRegex:         ptr.To(""),
+				DenyDeleteTag:              ptr.To(false),
+				FileNameRegex:              ptr.To(""),
+				MaxFileSize:                ptr.To(0),
+				MemberCheck:                ptr.To(false),
+				PreventSecrets:             ptr.To(false),
+				RejectUnsignedCommits:      ptr.To(false),
+				RejectNonDCOCommits:        ptr.To(false),
+			}),
 			withProjectCreationLevel(&v1alpha1ProjectCreationLevel),
 			withSubGroupCreationLevel(&v1alpha1SubGroupCreationLevel),
 		}
 		wantGroupModifier := []groupModifier{
 			withClientDefaultValues(),
 			withExternalName("0"),
+			withGroupPushRules(&v1alpha1.PushRules{
+				AuthorEmailRegex:           ptr.To(""),
+				BranchNameRegex:            ptr.To(""),
+				CommitCommitterCheck:       ptr.To(false),
+				CommitCommitterNameCheck:   ptr.To(false),
+				CommitMessageNegativeRegex: ptr.To(""),
+				CommitMessageRegex:         ptr.To(""),
+				DenyDeleteTag:              ptr.To(false),
+				FileNameRegex:              ptr.To(""),
+				MaxFileSize:                ptr.To(0),
+				MemberCheck:                ptr.To(false),
+				PreventSecrets:             ptr.To(false),
+				RejectUnsignedCommits:      ptr.To(false),
+				RejectNonDCOCommits:        ptr.To(false),
+			}),
 			withConditions(xpv1.Available()),
 			withVisibility(&v1alpha1Visibility),
 			withProjectCreationLevel(&v1alpha1ProjectCreationLevel),
@@ -517,6 +621,9 @@ func TestObserve(t *testing.T) {
 				group: &fake.MockClient{
 					MockGetGroup: func(pid interface{}, options ...gitlab.RequestOptionFunc) (*gitlab.Group, *gitlab.Response, error) {
 						return gitlabGroup, &gitlab.Response{}, nil
+					},
+					MockGetGroupPushRules: func(gid interface{}, options ...gitlab.RequestOptionFunc) (*gitlab.GroupPushRules, *gitlab.Response, error) {
+						return &gitlab.GroupPushRules{}, nil, nil
 					},
 				},
 				cr: group(argsGroupModifier...),
@@ -647,6 +754,9 @@ func TestUpdate(t *testing.T) {
 					MockUpdateGroup: func(pid interface{}, opt *gitlab.UpdateGroupOptions, options ...gitlab.RequestOptionFunc) (*gitlab.Group, *gitlab.Response, error) {
 						return &gitlab.Group{ID: 1234}, &gitlab.Response{}, nil
 					},
+					MockAddGroupPushRule: func(gid interface{}, opt *gitlab.AddGroupPushRuleOptions, options ...gitlab.RequestOptionFunc) (*gitlab.GroupPushRules, *gitlab.Response, error) {
+						return &gitlab.GroupPushRules{}, &gitlab.Response{}, nil
+					},
 				},
 				cr: group(withStatus(v1alpha1.GroupObservation{ID: &groupID}), withExternalName("1234")),
 			},
@@ -669,6 +779,9 @@ func TestUpdate(t *testing.T) {
 								},
 							},
 						}, nil, nil
+					},
+					MockAddGroupPushRule: func(gid interface{}, opt *gitlab.AddGroupPushRuleOptions, options ...gitlab.RequestOptionFunc) (*gitlab.GroupPushRules, *gitlab.Response, error) {
+						return &gitlab.GroupPushRules{}, &gitlab.Response{}, nil
 					},
 					MockShareGroupWithGroup: func(gid interface{}, opt *gitlab.ShareGroupWithGroupOptions, options ...gitlab.RequestOptionFunc) (*gitlab.Group, *gitlab.Response, error) {
 						return nil, nil, nil
@@ -717,6 +830,9 @@ func TestUpdate(t *testing.T) {
 							},
 						}, nil, nil
 					},
+					MockAddGroupPushRule: func(gid interface{}, opt *gitlab.AddGroupPushRuleOptions, options ...gitlab.RequestOptionFunc) (*gitlab.GroupPushRules, *gitlab.Response, error) {
+						return &gitlab.GroupPushRules{}, &gitlab.Response{}, nil
+					},
 					MockUnshareGroupFromGroup: func(gid interface{}, groupID int, options ...gitlab.RequestOptionFunc) (*gitlab.Response, error) {
 						return nil, nil
 					},
@@ -742,6 +858,9 @@ func TestUpdate(t *testing.T) {
 				group: &fake.MockClient{
 					MockShareGroupWithGroup: func(gid interface{}, opt *gitlab.ShareGroupWithGroupOptions, options ...gitlab.RequestOptionFunc) (*gitlab.Group, *gitlab.Response, error) {
 						return nil, nil, errBoom
+					},
+					MockAddGroupPushRule: func(gid interface{}, opt *gitlab.AddGroupPushRuleOptions, options ...gitlab.RequestOptionFunc) (*gitlab.GroupPushRules, *gitlab.Response, error) {
+						return &gitlab.GroupPushRules{}, &gitlab.Response{}, nil
 					},
 					MockUpdateGroup: func(pid interface{}, opt *gitlab.UpdateGroupOptions, options ...gitlab.RequestOptionFunc) (*gitlab.Group, *gitlab.Response, error) {
 						return &gitlab.Group{}, nil, nil
@@ -782,6 +901,9 @@ func TestUpdate(t *testing.T) {
 							},
 						}, nil, nil
 					},
+					MockAddGroupPushRule: func(gid interface{}, opt *gitlab.AddGroupPushRuleOptions, options ...gitlab.RequestOptionFunc) (*gitlab.GroupPushRules, *gitlab.Response, error) {
+						return &gitlab.GroupPushRules{}, &gitlab.Response{}, nil
+					},
 					MockUnshareGroupFromGroup: func(gid interface{}, groupID int, options ...gitlab.RequestOptionFunc) (*gitlab.Response, error) {
 						return nil, errBoom
 					},
@@ -799,6 +921,9 @@ func TestUpdate(t *testing.T) {
 				group: &fake.MockClient{
 					MockUpdateGroup: func(pid interface{}, opt *gitlab.UpdateGroupOptions, options ...gitlab.RequestOptionFunc) (*gitlab.Group, *gitlab.Response, error) {
 						return &gitlab.Group{}, &gitlab.Response{}, errBoom
+					},
+					MockAddGroupPushRule: func(gid interface{}, opt *gitlab.AddGroupPushRuleOptions, options ...gitlab.RequestOptionFunc) (*gitlab.GroupPushRules, *gitlab.Response, error) {
+						return &gitlab.GroupPushRules{}, &gitlab.Response{}, nil
 					},
 				},
 				cr: group(withStatus(v1alpha1.GroupObservation{ID: &groupID})),

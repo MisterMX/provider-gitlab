@@ -39,6 +39,9 @@ type Client interface {
 	DeleteGroup(gid interface{}, opt *gitlab.DeleteGroupOptions, options ...gitlab.RequestOptionFunc) (*gitlab.Response, error)
 	ShareGroupWithGroup(gid interface{}, opt *gitlab.ShareGroupWithGroupOptions, options ...gitlab.RequestOptionFunc) (*gitlab.Group, *gitlab.Response, error)
 	UnshareGroupFromGroup(gid interface{}, groupID int, options ...gitlab.RequestOptionFunc) (*gitlab.Response, error)
+	GetGroupPushRules(gid interface{}, options ...gitlab.RequestOptionFunc) (*gitlab.GroupPushRules, *gitlab.Response, error)
+	AddGroupPushRule(gid interface{}, opt *gitlab.AddGroupPushRuleOptions, options ...gitlab.RequestOptionFunc) (*gitlab.GroupPushRules, *gitlab.Response, error)
+	EditGroupPushRule(gid interface{}, opt *gitlab.EditGroupPushRuleOptions, options ...gitlab.RequestOptionFunc) (*gitlab.GroupPushRules, *gitlab.Response, error)
 }
 
 // NewGroupClient returns a new Gitlab Group service
@@ -196,4 +199,46 @@ func GenerateEditGroupOptions(name string, p *v1alpha1.GroupParameters) *gitlab.
 		ExtraSharedRunnersMinutesLimit: p.ExtraSharedRunnersMinutesLimit,
 	}
 	return group
+}
+
+// GenerateAddGroupPushRuleOptions generates group edit options
+func GenerateAddGroupPushRuleOptions(pr *v1alpha1.PushRules) *gitlab.AddGroupPushRuleOptions {
+	o := &gitlab.AddGroupPushRuleOptions{}
+	if pr != nil {
+		o.AuthorEmailRegex = pr.AuthorEmailRegex
+		o.BranchNameRegex = pr.BranchNameRegex
+		o.CommitCommitterCheck = pr.CommitCommitterCheck
+		o.CommitCommitterNameCheck = pr.CommitCommitterNameCheck
+		o.CommitMessageNegativeRegex = pr.CommitMessageNegativeRegex
+		o.CommitMessageRegex = pr.CommitMessageRegex
+		o.DenyDeleteTag = pr.DenyDeleteTag
+		o.FileNameRegex = pr.FileNameRegex
+		o.MaxFileSize = pr.MaxFileSize
+		o.MemberCheck = pr.MemberCheck
+		o.PreventSecrets = pr.PreventSecrets
+		o.RejectNonDCOCommits = pr.RejectNonDCOCommits
+		o.RejectUnsignedCommits = pr.RejectUnsignedCommits
+	}
+	return o
+}
+
+// GenerateEditGroupPushRuleOptions generates group edit options
+func GenerateEditGroupPushRuleOptions(pr *v1alpha1.PushRules) *gitlab.EditGroupPushRuleOptions {
+	o := &gitlab.EditGroupPushRuleOptions{}
+	if pr != nil {
+		o.AuthorEmailRegex = pr.AuthorEmailRegex
+		o.BranchNameRegex = pr.BranchNameRegex
+		o.CommitCommitterCheck = pr.CommitCommitterCheck
+		o.CommitCommitterNameCheck = pr.CommitCommitterNameCheck
+		o.CommitMessageNegativeRegex = pr.CommitMessageNegativeRegex
+		o.CommitMessageRegex = pr.CommitMessageRegex
+		o.DenyDeleteTag = pr.DenyDeleteTag
+		o.FileNameRegex = pr.FileNameRegex
+		o.MaxFileSize = pr.MaxFileSize
+		o.MemberCheck = pr.MemberCheck
+		o.PreventSecrets = pr.PreventSecrets
+		o.RejectNonDCOCommits = pr.RejectNonDCOCommits
+		o.RejectUnsignedCommits = pr.RejectUnsignedCommits
+	}
+	return o
 }

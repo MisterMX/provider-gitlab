@@ -146,6 +146,13 @@ type GroupParameters struct {
 	// +optional
 	ParentIDSelector *xpv1.Selector `json:"parentIdSelector,omitempty"`
 
+	// PushRule specifies are pre-receive Git hooks you can enable in a
+	// user-friendly interface.
+	// Push rules give you more control over what can and can’t be pushed to
+	// your repository.
+	// +optional
+	PushRules *PushRules `json:"pushRules,omitempty"`
+
 	// Pipeline minutes quota for this group (included in plan).
 	// Can be nil (default; inherit system default), 0 (unlimited) or > 0.
 	// +optional
@@ -168,6 +175,49 @@ type GroupParameters struct {
 	// GitLab Premium and Ultimate only.
 	// +optional
 	FullPathToRemove *string `json:"fullPathToRemove,omitempty"`
+}
+
+type PushRules struct {
+	// All commit author emails must match this regular expression.
+	AuthorEmailRegex *string `json:"authorEmailRegex,omitempty"`
+
+	// All branch names must match this regular expression.
+	BranchNameRegex *string `json:"branchNameRegex,omitempty"`
+
+	// Users can only push commits to this repository if the committer email is
+	// one of their own verified emails.
+	CommitCommitterCheck *bool `json:"commitCommitterCheck,omitempty"`
+
+	// Users can only push commits to this repository if the commit author name
+	// is consistent with their GitLab account name.
+	CommitCommitterNameCheck *bool `json:"commitCommitterNameCheck,omitempty"`
+
+	// No commit message is allowed to match this regular expression.
+	CommitMessageNegativeRegex *string `json:"commitMessageNegativeRegex,omitempty"`
+
+	// All commit messages must match this regular expression.
+	CommitMessageRegex *string `json:"commitMessageRegex,omitempty"`
+
+	// Deny deleting a tag.
+	DenyDeleteTag *bool `json:"denyDeleteTag,omitempty"`
+
+	// All committed filenames must not match this regular expression.
+	FileNameRegex *string `json:"fileNameRegex,omitempty"`
+
+	// Maximum file size (MB).
+	MaxFileSize *int `json:"maxFileSize,omitempty"`
+
+	// Restrict commits by author (email) to existing GitLab users.
+	MemberCheck *bool `json:"memberCheck,omitempty"`
+
+	// GitLab rejects any files that are likely to contain secrets.
+	PreventSecrets *bool `json:"preventSecrets,omitempty"`
+
+	// Reject commit when it’s not signed.
+	RejectUnsignedCommits *bool `json:"rejectUnsignedCommits,omitempty"`
+
+	// Reject commit when it’s not DCO certified.
+	RejectNonDCOCommits *bool `json:"rejectNonDcoCommits,omitempty"`
 }
 
 // AccessLevelValue represents a permission level within GitLab.

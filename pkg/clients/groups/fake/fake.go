@@ -59,6 +59,10 @@ type MockClient struct {
 	MockRemoveGroupVariable func(gid interface{}, key string, options ...gitlab.RequestOptionFunc) (*gitlab.Response, error)
 
 	MockListUsers func(opt *gitlab.ListUsersOptions, options ...gitlab.RequestOptionFunc) ([]*gitlab.User, *gitlab.Response, error)
+
+	MockGetGroupPushRules func(gid interface{}, options ...gitlab.RequestOptionFunc) (*gitlab.GroupPushRules, *gitlab.Response, error)
+	MockAddGroupPushRule  func(gid interface{}, opt *gitlab.AddGroupPushRuleOptions, options ...gitlab.RequestOptionFunc) (*gitlab.GroupPushRules, *gitlab.Response, error)
+	MockEditGroupPushRule func(gid interface{}, opt *gitlab.EditGroupPushRuleOptions, options ...gitlab.RequestOptionFunc) (*gitlab.GroupPushRules, *gitlab.Response, error)
 }
 
 // GetGroup calls the underlying MockGetGroup method.
@@ -184,4 +188,19 @@ func (c *MockClient) AddGroupSAMLLink(pid interface{}, opt *gitlab.AddGroupSAMLL
 // DeleteGroupSAMLLink calls the underlying MockDeleteGroupSAMLLink method.
 func (c *MockClient) DeleteGroupSAMLLink(pid interface{}, samlGroupName string, options ...gitlab.RequestOptionFunc) (*gitlab.Response, error) {
 	return c.MockDeleteGroupSAMLLink(pid, samlGroupName)
+}
+
+// GetGroupPushRules calls the underlying MockGetGroupPushRules method.
+func (c *MockClient) GetGroupPushRules(gid interface{}, options ...gitlab.RequestOptionFunc) (*gitlab.GroupPushRules, *gitlab.Response, error) {
+	return c.MockGetGroupPushRules(gid, options...)
+}
+
+// AddGroupPushRule calls the underlying MockEditGroupPushRule method.
+func (c *MockClient) EditGroupPushRule(gid interface{}, opt *gitlab.EditGroupPushRuleOptions, options ...gitlab.RequestOptionFunc) (*gitlab.GroupPushRules, *gitlab.Response, error) {
+	return c.MockEditGroupPushRule(gid, opt, options...)
+}
+
+// AddGroupPushRule calls the underlying MockAddGroupPushRule method.
+func (c *MockClient) AddGroupPushRule(gid interface{}, opt *gitlab.AddGroupPushRuleOptions, options ...gitlab.RequestOptionFunc) (*gitlab.GroupPushRules, *gitlab.Response, error) {
+	return c.MockAddGroupPushRule(gid, opt, options...)
 }
